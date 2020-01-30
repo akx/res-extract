@@ -8,10 +8,10 @@ import argparse
 import io
 from pprint import pprint
 
-
 # H/T https://docs.microsoft.com/en-us/previous-versions/ms997538(v=msdn.10)?redirectedfrom=MSDN
 # H/T https://devblogs.microsoft.com/oldnewthing/20101019-00/?p=12503
 # H/T https://devblogs.microsoft.com/oldnewthing/20120720-00/?p=7083
+from ne_resources import read_ne_resources
 
 
 class GRPICONDIR(Struct3):
@@ -42,10 +42,34 @@ class ICONDIRENTRY(Struct3):
     dwImageOffset: u32
 
 
-def get_resource_data(resources, type):
+def get_pe_resource_data(resources, type):
     for id, lang_to_res in resources.get(type, {}).items():
         for lang, data in lang_to_res.items():
             yield ((id, lang), bytes(data))
+
+
+def get_pe_icon_resources(pe):
+    resources = pe.parse_resources()
+    icon_groups = dict(
+        get_pe_resource_data(resources, KnownResourceTypes.RT_GROUP_ICON)
+    )
+    icon_datas = dict(get_pe_resource_data(resources, KnownResourceTypes.RT_ICON))
+    return (icon_datas, icon_groups)
+
+
+def get_ne_icon_resources(fin):
+    ner = list(read_ne_resources(fin))
+    icon_groups = {
+        (re.res_id, 0): data
+        for (re, data) in ner
+        if re.type_id == KnownResourceTypes.RT_GROUP_ICON
+    }
+    icon_datas = {
+        (re.res_id, 0): data
+        for (re, data) in ner
+        if re.type_id == KnownResourceTypes.RT_ICON
+    }
+    return (icon_datas, icon_groups)
 
 
 def reassemble_ico(dents_and_datas) -> bytes:
@@ -69,6 +93,22 @@ def reassemble_ico(dents_and_datas) -> bytes:
     return stream.getvalue()
 
 
+def get_icon_resources(fin):
+    try:
+        pe = parse_pe(grope.wrap_io(fin))
+    except RuntimeError as rte:
+        if "Not a PE file" in str(rte):
+            pe = None
+        else:
+            raise
+
+    if pe:
+        return get_pe_icon_resources(pe)
+    # Assume NE then...
+    fin.seek(0)
+    return get_ne_icon_resources(fin)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("file")
@@ -79,12 +119,7 @@ def main():
     os.makedirs(args.dir, exist_ok=True)
 
     with open(args.file, "rb") as fin:
-        pe = parse_pe(grope.wrap_io(fin))
-        resources = pe.parse_resources()
-        icon_groups = dict(
-            get_resource_data(resources, KnownResourceTypes.RT_GROUP_ICON)
-        )
-        icon_datas = dict(get_resource_data(resources, KnownResourceTypes.RT_ICON))
+        icon_datas, icon_groups = get_icon_resources(fin)
 
     for (gid, lang), data in icon_groups.items():
         header = GRPICONDIR.unpack_from(data)
@@ -93,10 +128,10 @@ def main():
         for i in range(header.idCount):
             offset = 6 + i * GRPICONDIRENTRY.calcsize()
             entry = GRPICONDIRENTRY.unpack_from(data[offset:])
-            # print("  ", i, entry)
+            print("  ", i, entry)
             idata = icon_datas[(entry.nId, lang)]
-            assert len(idata) == entry.dwBytesInRes
-            dents_and_datas.append((entry, idata))
+            assert len(idata) >= entry.dwBytesInRes, (len(idata),)
+            dents_and_datas.append((entry, idata[: entry.dwBytesInRes]))
         ico_data = reassemble_ico(dents_and_datas)
         if args.ico:
             ico_path = os.path.join(args.dir, f"{gid}_{lang}.ico")
