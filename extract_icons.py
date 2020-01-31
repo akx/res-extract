@@ -1,3 +1,5 @@
+import logging
+
 from PIL import Image
 from pe_tools import parse_pe
 from pe_tools.rsrc import KnownResourceTypes
@@ -6,12 +8,14 @@ import grope
 import os
 import argparse
 import io
-from pprint import pprint
+from ne_resources import read_ne_resources
+
+log = logging.getLogger(__name__)
+
 
 # H/T https://docs.microsoft.com/en-us/previous-versions/ms997538(v=msdn.10)?redirectedfrom=MSDN
 # H/T https://devblogs.microsoft.com/oldnewthing/20101019-00/?p=12503
 # H/T https://devblogs.microsoft.com/oldnewthing/20120720-00/?p=7083
-from ne_resources import read_ne_resources
 
 
 class GRPICONDIR(Struct3):
@@ -109,18 +113,15 @@ def get_icon_resources(fin):
     return get_ne_icon_resources(fin)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("file")
-    ap.add_argument("--dir", default=".")
-    ap.add_argument("--ico", default=False, action="store_true")
-    ap.add_argument("--png", default=False, action="store_true")
-    args = ap.parse_args()
-    os.makedirs(args.dir, exist_ok=True)
-
-    with open(args.file, "rb") as fin:
-        icon_datas, icon_groups = get_icon_resources(fin)
-
+def extract_icons(
+    *,
+    dest_dir: str,
+    source_file,
+    extract_ico: bool,
+    extract_png: bool,
+    name_prefix: str = "",
+):
+    icon_datas, icon_groups = get_icon_resources(source_file)
     for (gid, lang), data in icon_groups.items():
         header = GRPICONDIR.unpack_from(data)
         print(gid, lang, header)
@@ -133,20 +134,50 @@ def main():
             assert len(idata) >= entry.dwBytesInRes, (len(idata),)
             dents_and_datas.append((entry, idata[: entry.dwBytesInRes]))
         ico_data = reassemble_ico(dents_and_datas)
-        if args.ico:
-            ico_path = os.path.join(args.dir, f"{gid}_{lang}.ico")
+
+        if extract_ico:
+            ico_path = os.path.join(dest_dir, f"{name_prefix}{gid}_{lang}.ico")
             with open(ico_path, "wb") as outf:
                 outf.write(ico_data)
                 print("=>", outf.name)
-        if args.png:
+
+        if extract_png:
             img = Image.open(io.BytesIO(ico_data))
             for size in img.info["sizes"]:
                 w, h = size
                 img.size = size
                 img.load()
-                png_path = os.path.join(args.dir, f"{gid}_{lang}_{w}x{h}.png")
+                png_path = os.path.join(dest_dir, f"{name_prefix}{gid}_{lang}_{w}x{h}.png")
                 img.save(png_path)
                 print("=>", png_path)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("file", nargs="+")
+    ap.add_argument("-d", "--dir", required=True)
+    ap.add_argument("--continue-on-errors", default=False, action="store_true")
+    ap.add_argument("--ico", default=False, action="store_true")
+    ap.add_argument("--png", default=False, action="store_true")
+    args = ap.parse_args()
+    dest_dir = args.dir
+    os.makedirs(dest_dir, exist_ok=True)
+    for source_file in args.file:
+        print(source_file)
+        try:
+            with open(source_file, "rb") as fin:
+                extract_icons(
+                    dest_dir=dest_dir,
+                    source_file=fin,
+                    extract_ico=args.ico,
+                    extract_png=args.png,
+                    name_prefix=(f"{os.path.basename(source_file)}_" if len(args.file) > 1 else ''),
+                )
+        except Exception:
+            if args.continue_on_errors:
+                log.exception(f'Failed extracting from {source_file}', exc_info=True)
+            else:
+                raise
 
 
 if __name__ == "__main__":
