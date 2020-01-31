@@ -1,12 +1,13 @@
 """
 Read resource entries from NE binaries.
 """
-import io
+import logging
 import struct
 from dataclasses import dataclass
 
 from pe_tools import KnownResourceTypes
 
+log = logging.getLogger(__name__)
 
 def read_u16(s):
     c = s.read(2)
@@ -36,8 +37,6 @@ def read_ne_resource_table(res_table_stream):
         type_id = read_u16(res_table_stream)
         if type_id == 0:
             break
-        assert type_id & 0x8000  # no support for string offsets right now
-        type_id &= 0x7FFF
         count = read_u16(res_table_stream)
         reserved = read_u32(res_table_stream)
         for i in range(count):
@@ -47,10 +46,17 @@ def read_ne_resource_table(res_table_stream):
             res_id = read_u16(res_table_stream)
             res_handle = read_u16(res_table_stream)
             res_usage = read_u16(res_table_stream)
-            assert res_id & 0x8000  # no support for string offsets right now
+
+            # Do these skips here so we read the table correctly without needing to seek
+            if not type_id & 0x8000:
+                log.warning(f'skipping resource with string-offset type ID {type_id}')
+                continue
+            if not res_id & 0x8000:
+                log.warning(f'skipping resource of type {type_id} with string-offset ID {res_id}')
+                continue
             yield ResourceEntry(
-                type_id=type_id,
-                res_id=res_id & 0x7FFF,
+                type_id=(type_id & 0x7FFF),
+                res_id=(res_id & 0x7FFF),
                 res_offset=res_offset,
                 res_length=res_length,
             )
