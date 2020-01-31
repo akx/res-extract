@@ -7,7 +7,14 @@ from dataclasses import dataclass
 
 from pe_tools import KnownResourceTypes
 
+from res_extract.resources import ResourceEntry
+
 log = logging.getLogger(__name__)
+
+
+class NotNEFile(ValueError):
+    pass
+
 
 def read_u16(s):
     c = s.read(2)
@@ -20,7 +27,7 @@ def read_u32(s):
 
 
 @dataclass
-class ResourceEntry:
+class NEResourceEntry:
     type_id: int
     res_id: int
     res_offset: int
@@ -49,12 +56,14 @@ def read_ne_resource_table(res_table_stream):
 
             # Do these skips here so we read the table correctly without needing to seek
             if not type_id & 0x8000:
-                log.warning(f'skipping resource with string-offset type ID {type_id}')
+                log.warning(f"skipping resource with string-offset type ID {type_id}")
                 continue
             if not res_id & 0x8000:
-                log.warning(f'skipping resource of type {type_id} with string-offset ID {res_id}')
+                log.warning(
+                    f"skipping resource of type {type_id} with string-offset ID {res_id}"
+                )
                 continue
-            yield ResourceEntry(
+            yield NEResourceEntry(
                 type_id=(type_id & 0x7FFF),
                 res_id=(res_id & 0x7FFF),
                 res_offset=res_offset,
@@ -76,9 +85,15 @@ def read_ne_resources(exe):
         else:
             ne_header_offset = 0x480  # Just a guess!
     else:
-        ne_header_offset = 0
+        raise NotNEFile(
+            f"{exe} doesn't look like a NE file (initial MZ signature is {signature!r})"
+        )
     exe.seek(ne_header_offset)
-    assert exe.read(2) == b"NE"
+    ne_magic = exe.read(2)
+    if ne_magic != b"NE":
+        raise NotNEFile(
+            f"{exe} doesn't look like a NE file (magic {ne_magic!r} not 'NE')"
+        )
     exe.seek(ne_header_offset + 0x24)
     res_table_off = read_u16(exe)
     exe.seek(ne_header_offset + res_table_off)
@@ -87,7 +102,7 @@ def read_ne_resources(exe):
         exe.seek(re.res_offset)
         data = exe.read(re.res_length)
         assert len(data) == re.res_length
-        yield (re, data)
+        yield ResourceEntry(type_id=re.type_id, res_id=re.res_id, lang_id=0, data=data)
 
 
 def main():
