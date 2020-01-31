@@ -4,13 +4,15 @@ import logging
 import os
 
 from PIL import Image
+from pe_tools import KnownResourceTypes
 
 from res_extract import icons as libicons
+from res_extract.resources import get_resources_from_file
 
 log = logging.getLogger(__name__)
 
 
-def extract_icons(
+def extract_images(
     *,
     dest_dir: str,
     source_file,
@@ -18,7 +20,22 @@ def extract_icons(
     extract_png: bool,
     name_prefix: str = "",
 ):
-    for r, ico_data in libicons.extract_icons(source_file=source_file):
+    resources = list(get_resources_from_file(source_file))
+    image_resources = [
+        r for r in resources if r.type_id in (KnownResourceTypes.RT_BITMAP,)
+    ]
+    for r in image_resources:
+        # Here's hoping DibImageFile can handle this!
+        img = Image.open(io.BytesIO(r.data))
+        img.load()
+        if extract_png:
+            png_path = os.path.join(
+                dest_dir, f"{name_prefix}{r.res_id}_{r.lang_id}_bitmap.png"
+            )
+            img.save(png_path)
+            print("=>", png_path)
+
+    for r, ico_data in libicons.extract_icons(resources):
         if extract_ico:
             ico_path = os.path.join(
                 dest_dir, f"{name_prefix}{r.res_id}_{r.lang_id}.ico"
@@ -54,7 +71,7 @@ def main():
         print(source_file)
         try:
             with open(source_file, "rb") as fin:
-                extract_icons(
+                extract_images(
                     dest_dir=dest_dir,
                     source_file=fin,
                     extract_ico=args.ico,

@@ -5,11 +5,11 @@ All instructions assume you have successfully installed the requirements.
 
 Requires Python 3.
 
-Extract icons from a PE or NE file (.exe)
------------------------------------------
+Extract images and icons from a PE or NE file (.exe/.dll/...)
+-------------------------------------------------------------
 
 ```
-python extract_icons.py /Volumes/OFFPRO_Z/EXCEL/EXCEL.EXE --png --ico --dir=./excel
+python extract_images.py /Volumes/OFFPRO_Z/EXCEL/EXCEL.EXE --png --ico --dir=./excel
 ```
 
 will extract reconstituted ICO files as well as PNG files into `./excel`.

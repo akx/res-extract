@@ -16,6 +16,9 @@ class ResourceEntry:
     def type(self):
         return KnownResourceTypes.get_type_name(self.type_id)
 
+    def __repr__(self):
+        return f"{self.type}({self.res_id} @ {self.lang_id}, {len(self.data)} bytes)"
+
 
 def get_resources_from_file(exe_fp) -> Iterable[ResourceEntry]:
     try:

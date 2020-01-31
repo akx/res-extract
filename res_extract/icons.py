@@ -1,6 +1,6 @@
 import io
 import logging
-from typing import BinaryIO
+from typing import BinaryIO, Iterable
 
 from pe_tools import Struct3, u16, u8, u32
 from pe_tools.rsrc import KnownResourceTypes
@@ -64,10 +64,10 @@ def reassemble_ico(dents_and_datas) -> bytes:
     return stream.getvalue()
 
 
-def extract_icons(*, source_file: BinaryIO):
+def extract_icons(resources: Iterable[ResourceEntry]):
     group_resources = []
     icon_resources = []
-    for re in get_resources_from_file(source_file):
+    for re in resources:
         if re.type_id == KnownResourceTypes.RT_GROUP_ICON:
             group_resources.append(re)
         elif re.type_id == KnownResourceTypes.RT_ICON:
