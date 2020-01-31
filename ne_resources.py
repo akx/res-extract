@@ -66,7 +66,15 @@ def read_ne_resource_table(res_table_stream):
 def read_ne_resources(exe):
     signature = exe.read(2)
     if signature == b"MZ":
-        ne_header_offset = 0x480  # TODO: should read this from the MZ header really
+        # If the word value at offset 18h is 40h or greater, the word
+        # value at 3Ch is typically an offset to a Windows header.
+        exe.seek(0x18)
+        word_18 = read_u16(exe)
+        if word_18 >= 0x40:
+            exe.seek(0x3C)
+            ne_header_offset = read_u16(exe)
+        else:
+            ne_header_offset = 0x480  # Just a guess!
     else:
         ne_header_offset = 0
     exe.seek(ne_header_offset)
