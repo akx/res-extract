@@ -67,6 +67,8 @@ def main():
     args = ap.parse_args()
     dest_dir = args.dir
     os.makedirs(dest_dir, exist_ok=True)
+    if not (args.ico or args.png):
+        print("Warning: neither --ico nor --png specified, nothing will be extracted")
     for source_file in args.file:
         print(source_file)
         try:
