@@ -19,6 +19,18 @@ class ResourceEntry:
     def type(self):
         return KnownResourceTypes.get_type_name(self.type_id)
 
+    @property
+    def filename_part(self) -> str:
+        bits = []
+        if self.name:
+            bits.append(self.name)
+        else:
+            bits.append(str(self.res_id))
+
+        if self.lang_id:
+            bits.append(str(self.lang_id))
+        return "_".join(bits)
+
     def __repr__(self):
         return f"{self.type}({self.res_id} @ {self.lang_id}, {len(self.data)} bytes)"
 

@@ -32,14 +32,12 @@ def extract_images(
         img = Image.open(io.BytesIO(r.data))
         img.load()
         if extract_png:
-            png_path = os.path.join(
-                dest_dir, f"{name_prefix}bmp_{r.res_id}_{r.lang_id}.png"
-            )
+            png_path = os.path.join(dest_dir, f"{name_prefix}bmp_{r.filename_part}.png")
             img.save(png_path)
             print(log_prefix, "=>", png_path)
 
     for r, ico_data in libicons.extract_icons(resources):
-        ico_prefix = f"{name_prefix}ico_{r.res_id}_{r.lang_id}"
+        ico_prefix = f"{name_prefix}ico_{r.filename_part}"
         if extract_ico:
             ico_path = os.path.join(dest_dir, f"{ico_prefix}.ico")
             with open(ico_path, "wb") as outf:
