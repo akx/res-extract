@@ -1,11 +1,17 @@
 import argparse
 import collections
 import io
+import multiprocessing
 import os
+import re
 import shutil
 import subprocess
-import sys
 import tempfile
+
+MSEXPAND = shutil.which("msexpand")
+
+if not MSEXPAND:
+    raise ValueError("msexpand not found in PATH")
 
 
 def main():
@@ -15,53 +21,85 @@ def main():
     ap.add_argument("--in-dir", required=True, help="input directory")
     ap.add_argument(
         "--legacy-inf",
-        help="(try to) read a legacy setup.inf file (e.g. excel 5) to guess true file extensions",
+        help="(try to) read a legacy setup.inf file (e.g. excel 5, windows 3.11) to guess true file extensions",
     )
-    ap.add_argument("--out-dir", required=True, help="output directory")
+    ap.add_argument("--out-dir", required=False, help="output directory")
     args = ap.parse_args()
+    if not args.out_dir:
+        args.out_dir = args.in_dir.rstrip(os.sep) + "_expanded"
     os.makedirs(args.out_dir, exist_ok=True)
     input_files = [
         sde
         for sde in os.scandir(args.in_dir)
         if sde.is_file() and sde.name.endswith("_")
     ]
+    if not input_files:
+        raise ValueError(f"No files found in {args.in_dir}")
 
-    filename_map = {}  # destination <-> [scandir entries]
+    filename_map: dict[str, list[os.DirEntry]] = {}
+    input_filenames = {sde.name.lower(): sde for sde in input_files}
     if args.legacy_inf:
-        input_filenames = {sde.name.lower(): sde for sde in input_files}
-        with open(args.legacy_inf, "r") as f:
-            parse_legacy_inf(filename_map, input_filenames, f)
+        with open(args.legacy_inf) as f:
+            parse_legacy_inf(filename_map, input_filenames, f.read())
 
     # TODO: add support for no filename_map (i.e. guess from extensions)
 
     if not filename_map:
         raise NotImplementedError(
-            "Support for _not_ reading an INF file is not yet around"
+            "No filename map was created. "
+            "If you did pass --legacy-inf, it may not have been parsed correctly.",
         )
 
+    jobs = []
     for dest_filename, source_sdes in sorted(filename_map.items()):
         dest_path = os.path.join(args.out_dir, dest_filename)
-        print(dest_path, "<-", source_sdes)
-        buf = io.BytesIO()
-        for sde in source_sdes:
-            with tempfile.NamedTemporaryFile(prefix="ms_compress_") as tf:
-                subprocess.check_call(
-                    [
-                        "/usr/bin/env",  # todo: not portable
-                        "msexpand",
-                        sde.path,
-                        tf.name,
-                    ],
-                )
-                tf.seek(0)
-                shutil.copyfileobj(tf, buf)
+        src_paths = [sde.path for sde in source_sdes]
+        jobs.append((src_paths, dest_path))
 
-        with open(dest_path, "wb") as outf:
-            buf.seek(0)
-            shutil.copyfileobj(buf, outf)
+    with multiprocessing.Pool() as pool:
+        pool.starmap(msexpand, jobs)
 
 
-def parse_legacy_inf(filename_map: dict, input_filenames: dict, fp):
+def msexpand(src_paths: list[str], dest_path: str) -> None:
+    print(dest_path, "<-", src_paths)
+    buf = io.BytesIO()
+    # Expand and concatenate all source files into a single buffer...
+    for src_path in src_paths:
+        with tempfile.NamedTemporaryFile(prefix="ms_compress_") as tf:
+            subprocess.check_call(
+                [
+                    MSEXPAND,
+                    src_path,
+                    tf.name,
+                ],
+            )
+            tf.seek(0)
+            shutil.copyfileobj(tf, buf)
+    # ... then write the buffer to the destination file.
+    with open(dest_path, "wb") as outf:
+        buf.seek(0)
+        shutil.copyfileobj(buf, outf)
+
+
+def parse_legacy_inf(
+    filename_map: dict[str, list[os.DirEntry]],
+    input_filenames: dict[str, os.DirEntry],
+    data: str,
+):
+    if data.startswith("[Source Media Descriptions]"):
+        parse_excel5_style_inf(filename_map, input_filenames, data)
+    elif ";; SETUP.INF" in data[:512]:
+        parse_windows3_style_inf(filename_map, input_filenames, data)
+    else:
+        raise NotImplementedError("Unknown legacy INF format")
+
+
+def parse_excel5_style_inf(
+    filename_map: dict[str, list[os.DirEntry]],
+    input_filenames: dict[str, os.DirEntry],
+    data: str,
+):
+    fp = io.StringIO(data)
     artifact_info = collections.defaultdict(list)
     group_name = None
     for line in fp:
@@ -100,6 +138,26 @@ def parse_legacy_inf(filename_map: dict, input_filenames: dict, fp):
                     key,
                     infos,
                 )
+
+
+def parse_windows3_style_inf(
+    filename_map: dict[str, list[os.DirEntry]],
+    input_filenames: dict[str, os.DirEntry],
+    data: str,
+):
+    # This format is pretty ad-hoc, so we'll just do a simple regex to find 8.3 filenames
+    # and map them to the best guess of the true filename
+    misses = set()
+    for filename_match in re.finditer(r"(\w{1,8}\.\w{1,3})", data):
+        filename = filename_match.group(1)
+        compressed_guess = filename.lower()[:-1] + "_"
+        input_file = input_filenames.get(compressed_guess)
+        if input_file:
+            filename_map[filename] = [input_file]
+        else:
+            misses.add(filename)
+    if misses:
+        print("Legacy INF: unable to map source file for", misses)
 
 
 if __name__ == "__main__":

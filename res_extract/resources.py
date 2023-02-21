@@ -1,5 +1,7 @@
+from __future__ import annotations
+
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 import grope
 from pe_tools import KnownResourceTypes, parse_pe
@@ -11,10 +13,23 @@ class ResourceEntry:
     res_id: int
     lang_id: int
     data: bytes
+    name: str | None = None
 
     @property
     def type(self):
         return KnownResourceTypes.get_type_name(self.type_id)
+
+    @property
+    def filename_part(self) -> str:
+        bits = []
+        if self.name:
+            bits.append(self.name)
+        else:
+            bits.append(str(self.res_id))
+
+        if self.lang_id:
+            bits.append(str(self.lang_id))
+        return "_".join(bits)
 
     def __repr__(self):
         return f"{self.type}({self.res_id} @ {self.lang_id}, {len(self.data)} bytes)"
@@ -34,7 +49,10 @@ def get_resources_from_file(exe_fp) -> Iterable[ResourceEntry]:
             for res_id, lang_to_res in resources_of_type_map.items():
                 for lang, data in lang_to_res.items():
                     yield ResourceEntry(
-                        type_id=type_id, res_id=res_id, lang_id=lang, data=bytes(data)
+                        type_id=type_id,
+                        res_id=res_id,
+                        lang_id=lang,
+                        data=bytes(data),
                     )
         return
     # Assume NE then...
