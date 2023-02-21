@@ -1,0 +1,24 @@
+[tool.ruff]
+target-version = "py39"
+select = [
+    "B",
+    "C",
+    "COM",
+    "E",
+    "F",
+    "I",
+    "UP",
+    "TID252",
+]
+ignore = [
+    "B007",
+    "B905",
+    "C901", # Complexity
+    "E501", # Line length
+]
+unfixable = [
+    "F841",
+]
+
+[tool.ruff.flake8-tidy-imports]
+ban-relative-imports = "all"

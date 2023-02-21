@@ -2,6 +2,7 @@ import argparse
 import os
 import shutil
 import sys
+
 from fs import open_fs
 
 
@@ -27,7 +28,7 @@ def main():
                     try:
                         fi = fs.getinfo(file)
                         os.utime(dest_path, (fi.modified, fi.modified))
-                    except Exception as e:
+                    except Exception:
                         pass
 
 

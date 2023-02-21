@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from pe_tools import KnownResourceTypes
 
-from res_extract.errors import NotNEFile, BadResourceTable
+from res_extract.errors import BadResourceTable, NotNEFile
 from res_extract.resources import ResourceEntry
 
 log = logging.getLogger(__name__)
@@ -119,7 +119,7 @@ def read_ne_resource_table(res_table_stream, *, log_prefix=""):
     align_shift = read_u16(res_table_stream)
     if align_shift > 31:
         raise BadResourceTable(
-            f"NE resource table align_shift {align_shift} is suspiciously large"
+            f"NE resource table align_shift {align_shift} is suspiciously large",
         )
     resources_to_rename = []
     while True:
@@ -127,14 +127,14 @@ def read_ne_resource_table(res_table_stream, *, log_prefix=""):
         if type_id == 0:
             break
         count = read_u16(res_table_stream)
-        reserved = read_u32(res_table_stream)
+        _reserved = read_u32(res_table_stream)
         for i in range(count):
             res_offset = read_u16(res_table_stream) * (1 << align_shift)
             res_length = read_u16(res_table_stream) * (1 << align_shift)
-            res_flags = read_u16(res_table_stream)
+            _res_flags = read_u16(res_table_stream)
             res_id = read_u16(res_table_stream)
-            res_handle = read_u16(res_table_stream)
-            res_usage = read_u16(res_table_stream)
+            _res_handle = read_u16(res_table_stream)
+            _res_usage = read_u16(res_table_stream)
 
             re = NEResourceEntry(
                 type_id=(type_id & 0x7FFF),
@@ -198,13 +198,13 @@ def read_ne_resources(exe):
             ne_header_offset = 0x480  # Just a guess!
     else:
         raise NotNEFile(
-            f"{name} doesn't look like a NE file (initial MZ signature is {signature!r})"
+            f"{name} doesn't look like a NE file (initial MZ signature is {signature!r})",
         )
     exe.seek(ne_header_offset)
     header = NEHeader.from_stream(exe)
     if header.ne_magic != b"NE":
         raise NotNEFile(
-            f"{name} doesn't look like a NE file (magic {header.ne_magic!r} at offset {hex(ne_header_offset)} not 'NE')"
+            f"{name} doesn't look like a NE file (magic {header.ne_magic!r} at offset {hex(ne_header_offset)} not 'NE')",
         )
     exe.seek(ne_header_offset + header.resource_table_offset)
     resource_entries = list(read_ne_resource_table(exe, log_prefix=str(exe)))

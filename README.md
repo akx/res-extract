@@ -36,5 +36,3 @@ python3 expand_ms_compress.py --in-dir excel_5_diskette_contents/ --legacy-inf=e
 ```
 
 will expand all underscorey files from your (previously extracted) Excel 5 diskettes into `excel_5_expanded`.
-
-

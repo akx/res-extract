@@ -1,8 +1,8 @@
 import io
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
-from pe_tools import Struct3, u16, u8, u32
+from pe_tools import Struct3, u8, u16, u32
 from pe_tools.rsrc import KnownResourceTypes
 
 from res_extract.resources import ResourceEntry
@@ -79,7 +79,8 @@ def extract_icons(resources: Iterable[ResourceEntry]):
 
 
 def reassemble_ico_from_group_resource(
-    group_resource: ResourceEntry, icon_datas: dict
+    group_resource: ResourceEntry,
+    icon_datas: dict,
 ) -> bytes:
     header = GRPICONDIR.unpack_from(group_resource.data)
     dents_and_datas = []

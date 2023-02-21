@@ -5,7 +5,6 @@ import multiprocessing
 import os
 import re
 import shutil
-
 import subprocess
 import tempfile
 
@@ -40,7 +39,7 @@ def main():
     filename_map: dict[str, list[os.DirEntry]] = {}
     input_filenames = {sde.name.lower(): sde for sde in input_files}
     if args.legacy_inf:
-        with open(args.legacy_inf, "r") as f:
+        with open(args.legacy_inf) as f:
             parse_legacy_inf(filename_map, input_filenames, f.read())
 
     # TODO: add support for no filename_map (i.e. guess from extensions)
@@ -48,7 +47,7 @@ def main():
     if not filename_map:
         raise NotImplementedError(
             "No filename map was created. "
-            "If you did pass --legacy-inf, it may not have been parsed correctly."
+            "If you did pass --legacy-inf, it may not have been parsed correctly.",
         )
 
     jobs = []

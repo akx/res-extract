@@ -4,8 +4,8 @@ import logging
 import os
 import sys
 
-from PIL import Image
 from pe_tools import KnownResourceTypes
+from PIL import Image
 
 from res_extract import icons as libicons
 from res_extract.errors import ParseError
@@ -92,7 +92,7 @@ def main():
                 )
                 success = True
         except ParseError as exc:
-            log.warning(f"%s: %s", source_file, exc)
+            log.warning("%s: %s", source_file, exc)
         except Exception:
             if args.continue_on_errors:
                 log.exception(f"Failed extracting from {source_file}", exc_info=True)
@@ -105,14 +105,15 @@ def main():
                 im.load()
                 if args.png:
                     dest_file = os.path.join(
-                        dest_dir, os.path.basename(source_file) + ".png"
+                        dest_dir,
+                        os.path.basename(source_file) + ".png",
                     )
                     im.save(dest_file)
                     print(
-                        f"Image {source_file} ({im.size} {im.format}) converted to {dest_file}"
+                        f"Image {source_file} ({im.size} {im.format}) converted to {dest_file}",
                     )
             except Exception as exc:
-                log.warning(f"%s: not an image either: %s", source_file, exc)
+                log.warning("%s: not an image either: %s", source_file, exc)
 
 
 if __name__ == "__main__":
