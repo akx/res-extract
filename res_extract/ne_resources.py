@@ -1,6 +1,8 @@
 """
 Read resource entries from NE binaries.
 """
+from __future__ import annotations
+
 import logging
 import struct
 from dataclasses import dataclass
@@ -110,6 +112,7 @@ class NEHeader:
 class NEResourceEntry:
     type_id: int
     res_id: int
+    res_name: str | None
     res_offset: int
     res_length: int
 
@@ -118,12 +121,14 @@ class NEResourceEntry:
         return KnownResourceTypes.get_type_name(self.type_id)
 
 
-def read_ne_resource_table(res_table_stream):
+def read_ne_resource_table(res_table_stream, *, log_prefix=""):
+    res_table_offset = res_table_stream.tell()
     align_shift = read_u16(res_table_stream)
     if align_shift > 31:
         raise BadResourceTable(
             f"NE resource table align_shift {align_shift} is suspiciously large"
         )
+    resources_to_rename = []
     while True:
         type_id = read_u16(res_table_stream)
         if type_id == 0:
@@ -138,25 +143,55 @@ def read_ne_resource_table(res_table_stream):
             res_handle = read_u16(res_table_stream)
             res_usage = read_u16(res_table_stream)
 
-            # Do these skips here so we read the table correctly without needing to seek
-            if not type_id & 0x8000:
-                log.debug(f"skipping resource with string-offset type ID {type_id}")
-                continue
-            if not res_id & 0x8000:
-                log.debug(
-                    f"skipping resource of type {type_id} with string-offset ID {res_id}"
-                )
-                continue
-            yield NEResourceEntry(
+            re = NEResourceEntry(
                 type_id=(type_id & 0x7FFF),
                 res_id=(res_id & 0x7FFF),
+                res_name=None,
                 res_offset=res_offset,
                 res_length=res_length,
             )
-    # TODO: read rscResourceNames here if required
+
+            # Do these skips here in the loop so we read the table correctly
+            # without needing to seek
+            if not type_id & 0x8000:
+                log.debug(
+                    f"%s: skipping resource with string-offset type ID {type_id}",
+                    log_prefix,
+                )
+                continue
+            if not res_id & 0x8000:  # We'll deal with these later
+                resources_to_rename.append(re)
+                continue
+            yield re
+
+    if not resources_to_rename:
+        # No need to read the name table either
+        return
+
+    # Read name table...
+    resource_names = {}
+    while True:
+        offset = res_table_stream.tell() - res_table_offset
+        name_len = read_u8(res_table_stream)
+        if name_len == 0:
+            break
+        name = res_table_stream.read(name_len).decode("ascii", errors="replace")
+        resource_names[offset] = name
+
+    for resource in resources_to_rename:
+        rid = resource.res_id
+        if rid not in resource_names:
+            log.warning(
+                f"%s: resource with ID {rid} has no name in resource name table",
+                log_prefix,
+            )
+            continue
+        resource.res_name = resource_names[rid]
+        yield resource
 
 
 def read_ne_resources(exe):
+    name = str(getattr(exe, "name", exe))
     signature = exe.read(2)
     if signature == b"MZ":
         # If the word value at offset 18h is 40h or greater, the word
@@ -170,21 +205,27 @@ def read_ne_resources(exe):
             ne_header_offset = 0x480  # Just a guess!
     else:
         raise NotNEFile(
-            f"{exe} doesn't look like a NE file (initial MZ signature is {signature!r})"
+            f"{name} doesn't look like a NE file (initial MZ signature is {signature!r})"
         )
     exe.seek(ne_header_offset)
     header = NEHeader.from_stream(exe)
     if header.ne_magic != b"NE":
         raise NotNEFile(
-            f"{exe} doesn't look like a NE file (magic {header.ne_magic!r} not 'NE')"
+            f"{name} doesn't look like a NE file (magic {header.ne_magic!r} at offset {hex(ne_header_offset)} not 'NE')"
         )
     exe.seek(ne_header_offset + header.resource_table_offset)
-    resource_entries = list(read_ne_resource_table(exe))
+    resource_entries = list(read_ne_resource_table(exe, log_prefix=str(exe)))
     for re in resource_entries:
         exe.seek(re.res_offset)
         data = exe.read(re.res_length)
         assert len(data) == re.res_length
-        yield ResourceEntry(type_id=re.type_id, res_id=re.res_id, lang_id=0, data=data)
+        yield ResourceEntry(
+            data=data,
+            lang_id=0,
+            name=re.res_name,
+            res_id=re.res_id,
+            type_id=re.type_id,
+        )
 
 
 def main():

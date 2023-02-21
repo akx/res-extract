@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -11,6 +13,7 @@ class ResourceEntry:
     res_id: int
     lang_id: int
     data: bytes
+    name: str | None = None
 
     @property
     def type(self):
