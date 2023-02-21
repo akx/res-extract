@@ -17,14 +17,18 @@ def main():
         "--legacy-inf",
         help="(try to) read a legacy setup.inf file (e.g. excel 5) to guess true file extensions",
     )
-    ap.add_argument("--out-dir", required=True, help="output directory")
+    ap.add_argument("--out-dir", required=False, help="output directory")
     args = ap.parse_args()
+    if not args.out_dir:
+        args.out_dir = args.in_dir.rstrip(os.sep) + "_expanded"
     os.makedirs(args.out_dir, exist_ok=True)
     input_files = [
         sde
         for sde in os.scandir(args.in_dir)
         if sde.is_file() and sde.name.endswith("_")
     ]
+    if not input_files:
+        raise ValueError(f"No files found in {args.in_dir}")
 
     filename_map = {}  # destination <-> [scandir entries]
     if args.legacy_inf:
