@@ -62,6 +62,7 @@ def main():
     ap.add_argument("--continue-on-errors", default=False, action="store_true")
     ap.add_argument("--ico", default=False, action="store_true")
     ap.add_argument("--png", default=False, action="store_true")
+    ap.add_argument("--process-images", default=False, action="store_true")
     ap.add_argument("--debug", default=False, action="store_true")
     args = ap.parse_args()
     if args.debug:
@@ -71,6 +72,7 @@ def main():
     if not (args.ico or args.png):
         print("Warning: neither --ico nor --png specified, nothing will be extracted")
     for source_file in args.file:
+        success = False
         try:
             with open(source_file, "rb") as fin:
                 extract_images(
@@ -85,6 +87,7 @@ def main():
                     ),
                     log_prefix=source_file,
                 )
+                success = True
         except ParseError as exc:
             log.warning(f"%s: %s", source_file, exc)
         except Exception:
@@ -93,6 +96,20 @@ def main():
             else:
                 print("Error while extracting", source_file, file=sys.stderr)
                 raise
+        if not success and args.process_images:
+            try:
+                im = Image.open(source_file)
+                im.load()
+                if args.png:
+                    dest_file = os.path.join(
+                        dest_dir, os.path.basename(source_file) + ".png"
+                    )
+                    im.save(dest_file)
+                    print(
+                        f"Image {source_file} ({im.size} {im.format}) converted to {dest_file}"
+                    )
+            except Exception as exc:
+                log.warning(f"%s: not an image either: %s", source_file, exc)
 
 
 if __name__ == "__main__":
