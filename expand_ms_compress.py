@@ -2,9 +2,9 @@ import argparse
 import collections
 import io
 import os
+import re
 import shutil
 import subprocess
-import sys
 import tempfile
 
 
@@ -15,7 +15,7 @@ def main():
     ap.add_argument("--in-dir", required=True, help="input directory")
     ap.add_argument(
         "--legacy-inf",
-        help="(try to) read a legacy setup.inf file (e.g. excel 5) to guess true file extensions",
+        help="(try to) read a legacy setup.inf file (e.g. excel 5, windows 3.11) to guess true file extensions",
     )
     ap.add_argument("--out-dir", required=False, help="output directory")
     args = ap.parse_args()
@@ -30,17 +30,18 @@ def main():
     if not input_files:
         raise ValueError(f"No files found in {args.in_dir}")
 
-    filename_map = {}  # destination <-> [scandir entries]
+    filename_map: dict[str, list[os.DirEntry]] = {}
+    input_filenames = {sde.name.lower(): sde for sde in input_files}
     if args.legacy_inf:
-        input_filenames = {sde.name.lower(): sde for sde in input_files}
         with open(args.legacy_inf, "r") as f:
-            parse_legacy_inf(filename_map, input_filenames, f)
+            parse_legacy_inf(filename_map, input_filenames, f.read())
 
     # TODO: add support for no filename_map (i.e. guess from extensions)
 
     if not filename_map:
         raise NotImplementedError(
-            "Support for _not_ reading an INF file is not yet around"
+            "No filename map was created. "
+            "If you did pass --legacy-inf, it may not have been parsed correctly."
         )
 
     for dest_filename, source_sdes in sorted(filename_map.items()):
@@ -65,7 +66,25 @@ def main():
             shutil.copyfileobj(buf, outf)
 
 
-def parse_legacy_inf(filename_map: dict, input_filenames: dict, fp):
+def parse_legacy_inf(
+    filename_map: dict[str, list[os.DirEntry]],
+    input_filenames: dict[str, os.DirEntry],
+    data: str,
+):
+    if data.startswith("[Source Media Descriptions]"):
+        parse_excel5_style_inf(filename_map, input_filenames, data)
+    elif ";; SETUP.INF" in data[:512]:
+        parse_windows3_style_inf(filename_map, input_filenames, data)
+    else:
+        raise NotImplementedError("Unknown legacy INF format")
+
+
+def parse_excel5_style_inf(
+    filename_map: dict[str, list[os.DirEntry]],
+    input_filenames: dict[str, os.DirEntry],
+    data: str,
+):
+    fp = io.StringIO(data)
     artifact_info = collections.defaultdict(list)
     group_name = None
     for line in fp:
@@ -104,6 +123,26 @@ def parse_legacy_inf(filename_map: dict, input_filenames: dict, fp):
                     key,
                     infos,
                 )
+
+
+def parse_windows3_style_inf(
+    filename_map: dict[str, list[os.DirEntry]],
+    input_filenames: dict[str, os.DirEntry],
+    data: str,
+):
+    # This format is pretty ad-hoc, so we'll just do a simple regex to find 8.3 filenames
+    # and map them to the best guess of the true filename
+    misses = set()
+    for filename_match in re.finditer(r"(\w{1,8}\.\w{1,3})", data):
+        filename = filename_match.group(1)
+        compressed_guess = filename.lower()[:-1] + "_"
+        input_file = input_filenames.get(compressed_guess)
+        if input_file:
+            filename_map[filename] = [input_file]
+        else:
+            misses.add(filename)
+    if misses:
+        print("Legacy INF: unable to map source file for", misses)
 
 
 if __name__ == "__main__":
