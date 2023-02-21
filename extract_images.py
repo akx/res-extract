@@ -8,7 +8,7 @@ from PIL import Image
 from pe_tools import KnownResourceTypes
 
 from res_extract import icons as libicons
-from res_extract.ne_resources import NotNEFile
+from res_extract.errors import ParseError
 from res_extract.resources import get_resources_from_file
 
 log = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ def main():
                     ),
                     log_prefix=source_file,
                 )
-        except NotNEFile as exc:
+        except ParseError as exc:
             log.warning(f"%s: %s", source_file, exc)
         except Exception:
             if args.continue_on_errors:

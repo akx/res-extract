@@ -9,17 +9,10 @@ from dataclasses import dataclass
 
 from pe_tools import KnownResourceTypes
 
+from res_extract.errors import NotNEFile, BadResourceTable
 from res_extract.resources import ResourceEntry
 
 log = logging.getLogger(__name__)
-
-
-class NotNEFile(ValueError):
-    pass
-
-
-class BadResourceTable(ValueError):
-    pass
 
 
 def read_u8(s) -> int:
