@@ -2,11 +2,13 @@ import argparse
 import io
 import logging
 import os
+import sys
 
 from PIL import Image
 from pe_tools import KnownResourceTypes
 
 from res_extract import icons as libicons
+from res_extract.ne_resources import NotNEFile
 from res_extract.resources import get_resources_from_file
 
 log = logging.getLogger(__name__)
@@ -19,6 +21,7 @@ def extract_images(
     extract_ico: bool,
     extract_png: bool,
     name_prefix: str = "",
+    log_prefix: str,
 ):
     resources = list(get_resources_from_file(source_file))
     image_resources = [
@@ -30,19 +33,18 @@ def extract_images(
         img.load()
         if extract_png:
             png_path = os.path.join(
-                dest_dir, f"{name_prefix}{r.res_id}_{r.lang_id}_bitmap.png"
+                dest_dir, f"{name_prefix}bmp_{r.res_id}_{r.lang_id}.png"
             )
             img.save(png_path)
-            print("=>", png_path)
+            print(log_prefix, "=>", png_path)
 
     for r, ico_data in libicons.extract_icons(resources):
+        ico_prefix = f"{name_prefix}ico_{r.res_id}_{r.lang_id}"
         if extract_ico:
-            ico_path = os.path.join(
-                dest_dir, f"{name_prefix}{r.res_id}_{r.lang_id}.ico"
-            )
+            ico_path = os.path.join(dest_dir, f"{ico_prefix}.ico")
             with open(ico_path, "wb") as outf:
                 outf.write(ico_data)
-                print("=>", outf.name)
+                print(log_prefix, "=>", outf.name)
 
         if extract_png:
             img = Image.open(io.BytesIO(ico_data))
@@ -50,11 +52,9 @@ def extract_images(
                 w, h = size
                 img.size = size
                 img.load()
-                png_path = os.path.join(
-                    dest_dir, f"{name_prefix}{r.res_id}_{r.lang_id}_{w}x{h}.png"
-                )
+                png_path = os.path.join(dest_dir, f"{ico_prefix}_{w}x{h}.png")
                 img.save(png_path)
-                print("=>", png_path)
+                print(log_prefix, "=>", png_path)
 
 
 def main():
@@ -64,13 +64,15 @@ def main():
     ap.add_argument("--continue-on-errors", default=False, action="store_true")
     ap.add_argument("--ico", default=False, action="store_true")
     ap.add_argument("--png", default=False, action="store_true")
+    ap.add_argument("--debug", default=False, action="store_true")
     args = ap.parse_args()
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
     dest_dir = args.dir
     os.makedirs(dest_dir, exist_ok=True)
     if not (args.ico or args.png):
         print("Warning: neither --ico nor --png specified, nothing will be extracted")
     for source_file in args.file:
-        print(source_file)
         try:
             with open(source_file, "rb") as fin:
                 extract_images(
@@ -83,11 +85,15 @@ def main():
                         if len(args.file) > 1
                         else ""
                     ),
+                    log_prefix=source_file,
                 )
+        except NotNEFile as exc:
+            log.warning(f"%s: %s", source_file, exc)
         except Exception:
             if args.continue_on_errors:
                 log.exception(f"Failed extracting from {source_file}", exc_info=True)
             else:
+                print("Error while extracting", source_file, file=sys.stderr)
                 raise
 
 
