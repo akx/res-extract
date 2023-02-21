@@ -17,8 +17,6 @@ will extract reconstituted ICO files as well as PNG files into `./excel`.
 Extract (multiple) diskette images into a directory
 ---------------------------------------------------
 
-Requires the `mtools` package (available in Homebrew and Apt).
-
 ```
 python3 extract_diskettes.py excel_5_diskettes/*.img -d excel_5_diskette_contents/
 ```
