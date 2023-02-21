@@ -1,11 +1,11 @@
 import io
 import logging
-from typing import BinaryIO, Iterable
+from typing import Iterable
 
 from pe_tools import Struct3, u16, u8, u32
 from pe_tools.rsrc import KnownResourceTypes
 
-from res_extract.resources import get_resources_from_file, ResourceEntry
+from res_extract.resources import ResourceEntry
 
 log = logging.getLogger(__name__)
 
@@ -82,12 +82,18 @@ def reassemble_ico_from_group_resource(
     group_resource: ResourceEntry, icon_datas: dict
 ) -> bytes:
     header = GRPICONDIR.unpack_from(group_resource.data)
-    print(group_resource, header)
     dents_and_datas = []
     for i in range(header.idCount):
         offset = 6 + i * GRPICONDIRENTRY.calcsize()
         entry = GRPICONDIRENTRY.unpack_from(group_resource.data[offset:])
-        print("  ", i, entry)
+        log.debug(
+            "%s: header %s, %d/%d: %s",
+            group_resource,
+            header,
+            i + 1,
+            header.idCount,
+            entry,
+        )
         idata = icon_datas[(entry.nId, group_resource.lang_id)]
         assert len(idata) >= entry.dwBytesInRes, (len(idata),)
         dents_and_datas.append((entry, idata[: entry.dwBytesInRes]))

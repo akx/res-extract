@@ -56,10 +56,10 @@ def read_ne_resource_table(res_table_stream):
 
             # Do these skips here so we read the table correctly without needing to seek
             if not type_id & 0x8000:
-                log.warning(f"skipping resource with string-offset type ID {type_id}")
+                log.debug(f"skipping resource with string-offset type ID {type_id}")
                 continue
             if not res_id & 0x8000:
-                log.warning(
+                log.debug(
                     f"skipping resource of type {type_id} with string-offset ID {res_id}"
                 )
                 continue
