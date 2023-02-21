@@ -73,6 +73,9 @@ def main():
         print("Warning: neither --ico nor --png specified, nothing will be extracted")
     for source_file in args.file:
         success = False
+        if os.path.getsize(source_file) == 0:
+            log.warning("%s: empty file", source_file)
+            continue
         try:
             with open(source_file, "rb") as fin:
                 extract_images(
