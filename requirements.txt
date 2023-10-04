@@ -12,7 +12,7 @@ grope==2.0.1
     # via pe-tools
 pe-tools==0.3.10
     # via -r requirements.in
-pillow==9.4.0
+pillow==10.0.1
     # via -r requirements.in
 pyfatfs==1.0.5
     # via -r requirements.in
